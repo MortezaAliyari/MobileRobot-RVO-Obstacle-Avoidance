@@ -5,7 +5,7 @@ We used at least two turtlebot3 burger models in Gazebo simulator.
 If you like the project give me a star! :star: 
 
 You can see the video: &nbsp;&nbsp;
-[![website](./img/youtube-dark.svg)](https://www.youtube.com/watch?v=5KaZ9I6VUvA)
+[![website](./img/youtube-dark.svg)](https://www.youtube.com/channel/UCyRBig4xgAdaRdIz14Xymrg)
 &nbsp;&nbsp;
 ---
 
