@@ -14,5 +14,5 @@ You can see the video: &nbsp;&nbsp;
 - ROS Noetic 
 - Gazebo11 & TurtleBot3
 ### Runing process:
-1- Frist step is designing Custome Close area in gazebo. This model is in "multi-agents/gazebomodels/CloseArea1"
-
+1- Frist step is designing Custome Close area in gazebo. This model is in "multi-agents/gazebomodels/CloseArea2"
+2- We also run the amcl and move_base node file to recieve and guid the robot to goal point.
