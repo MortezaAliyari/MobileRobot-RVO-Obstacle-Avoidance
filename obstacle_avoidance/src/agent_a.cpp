@@ -6,13 +6,16 @@
 #include <string>
 #include <iterator>
 #include "sensor_msgs/LaserScan.h"
+#include <nav_msgs/Odometry.h>
 using namespace std;
 
 typedef actionlib::SimpleActionClient<move_base_msgs::MoveBaseAction> MoveBaseClient;
 
 ros::Subscriber laser_subscriber;
-sensor_msgs::LaserScan laser_msg;
+ros::Subscriber odomObs1_sub;
 
+sensor_msgs::LaserScan laser_msg;
+nav_msgs::Odometry odomObs1_msg;
 bool rasa=true,actioncancel=false;
 
 int observation=0;
@@ -50,13 +53,21 @@ void laser_callback(const sensor_msgs::LaserScan::ConstPtr& scan_msg)
     }
 }
 
+void odomObs1_callback(const nav_msgs::Odometry::ConstPtr& odomobs1_msg){
+    ROS_INFO("Seq: [%d]", odomobs1_msg->header.seq);
+    ROS_INFO("Position-> x: [%f], y: [%f], z: [%f]", odomobs1_msg->pose.pose.position.x,odomobs1_msg->pose.pose.position.y, odomobs1_msg->pose.pose.position.z);
+    ROS_INFO("VelX: [%f], Wz: [%f]", odomobs1_msg->twist.twist.linear.x,odomobs1_msg->twist.twist.angular.z);
+}
+
+
 int main(int argc, char** argv){
 
   ros::init(argc, argv, "agent_a");
   ros::NodeHandle n;
   //tell the action client that we want to spin a thread by default
   MoveBaseClient ac("/tb3_1/move_base", true);
-  laser_subscriber = n.subscribe("/tb3_1/scan", 1000, laser_callback);
+  laser_subscriber = n.subscribe("/tb3_1/scan", 10, laser_callback);
+  odomObs1_sub     = n.subscribe("/tb3_2/odom", 10, odomObs1_callback);
   //wait for the action server to come up
   while(!ac.waitForServer(ros::Duration(5.0))){
     ROS_INFO("Waiting for the move_base action server to come up");
@@ -67,41 +78,41 @@ int main(int argc, char** argv){
   //we'll send a goal to the robot to move 1 meter forward
   goal.target_pose.header.frame_id = "map";
   while (1){
-  goal.target_pose.header.stamp = ros::Time::now();
+      goal.target_pose.header.stamp = ros::Time::now();
 
-  goal.target_pose.pose.position.x = x[0][0];
-  goal.target_pose.pose.position.y = x[0][1];
-  goal.target_pose.pose.orientation.w = x[0][2];
+      goal.target_pose.pose.position.x = x[0][0];
+      goal.target_pose.pose.position.y = x[0][1];
+      goal.target_pose.pose.orientation.w = x[0][2];
 
-  if (rasa){
-    ROS_INFO("The Goal position is : x: %f y: %f theta: %f", x[0][0], x[0][1], x[0][2]);
-    ac.sendGoal(goal);
-    ROS_INFO("Sending goal");
-    rasa=false;
-  }
+      if (rasa){
+        ROS_INFO("The Goal position is : x: %f y: %f theta: %f", x[0][0], x[0][1], x[0][2]);
+        ac.sendGoal(goal);
+        ROS_INFO("Sending goal");
+        rasa=false;
+      }
 
-  if(actioncancel && observation<2){
-  //ros::Duration(10.0).sleep();
-  ROS_INFO("cancel all goals");
-  ac.cancelAllGoals();
-  ROS_INFO("wait for 5 second");
-  ros::Duration(5.0).sleep();
-  rasa=true;
-  actioncancel=false;
-  }
-  //ac.waitForResult();
-  actionlib::SimpleClientGoalState state = ac.getState();
+      if(actioncancel && observation<2){
+      //ros::Duration(10.0).sleep();
+      ROS_INFO("cancel all goals");
+      ac.cancelAllGoals();
+      ROS_INFO("wait for 5 second");
+      ros::Duration(5.0).sleep();
+      rasa=true;
+      actioncancel=false;
+      }
+      //ac.waitForResult();
+      actionlib::SimpleClientGoalState state = ac.getState();
 
-  if(ac.getState() == actionlib::SimpleClientGoalState::SUCCEEDED){
-    ROS_INFO("Action finished: %s",state.toString().c_str());
-    break;
-   // ROS_INFO("Hooray, the base moved 1 meter forward");
-  }
-  else if (ac.getState() == actionlib::SimpleClientGoalState::LOST){
-    //ROS_INFO("Action failed: LOST");
-    ROS_INFO("no goal recieved");
-  }
-  ros::spinOnce();
+      if(ac.getState() == actionlib::SimpleClientGoalState::SUCCEEDED){
+        ROS_INFO("Action finished: %s",state.toString().c_str());
+        break;
+       // ROS_INFO("Hooray, the base moved 1 meter forward");
+      }
+      else if (ac.getState() == actionlib::SimpleClientGoalState::LOST){
+        //ROS_INFO("Action failed: LOST");
+        ROS_INFO("no goal recieved");
+      }
+      ros::spinOnce();
   }
   return 0;
 }
