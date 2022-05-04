@@ -15,7 +15,7 @@ sensor_msgs::LaserScan laser_msg;
 
 bool rasa=true,actioncancel=false;
 
-
+int observation=0;
 int loc1=1;
 int loc2=2;
 int loc3=3;
@@ -32,10 +32,22 @@ void laser_callback(const sensor_msgs::LaserScan::ConstPtr& scan_msg)
     size_t range_size = laser_ranges.size();
     float left_side = 0.0, right_side = 0.0;
     float range_min = laser_msg.range_min, range_max = laser_msg.range_max;
-    ROS_INFO("range_min: %f range_max: %f",range_min,range_max);
+//    ROS_INFO("range_min: %f, range_max: %f, range_size: %f",range_min,range_max,range_size);
+//    for(int i=0;i<range_size;i++){
+//        ROS_INFO("laser output:  %f",laser_ranges[i]);
 
+//    }
+    ROS_INFO(" minimum range: %f ",*min_element (laser_ranges.begin(), laser_ranges.end()));
+    if((*min_element (laser_ranges.begin(), laser_ranges.end()))<3 ){
+        ROS_INFO(" minimum range: %f ",*min_element (laser_ranges.begin(), laser_ranges.end()));
+        //ROS_INFO("Cancel all goals!");
+        //ROS_INFO("wait for 5 second!!");
+        //ROS_INFO("observation: %d",observation);
+        //ros::Duration(5.0).sleep();
+        actioncancel=true;
+        observation++;
 
-
+    }
 }
 
 int main(int argc, char** argv){
@@ -68,14 +80,14 @@ int main(int argc, char** argv){
     rasa=false;
   }
 
-  if(actioncancel==false){
-  ros::Duration(10.0).sleep();
+  if(actioncancel && observation<2){
+  //ros::Duration(10.0).sleep();
   ROS_INFO("cancel all goals");
   ac.cancelAllGoals();
   ROS_INFO("wait for 5 second");
   ros::Duration(5.0).sleep();
   rasa=true;
-  actioncancel=true;
+  actioncancel=false;
   }
   //ac.waitForResult();
   actionlib::SimpleClientGoalState state = ac.getState();
