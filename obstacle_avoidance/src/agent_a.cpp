@@ -17,7 +17,8 @@ ros::Subscriber odomObs1_sub;
 sensor_msgs::LaserScan laser_msg;
 nav_msgs::Odometry odomObs1_msg;
 bool rasa=true,actioncancel=false;
-
+Obs1Rad=0.2
+agnte1Rad=0.2
 int observation=0;
 int loc1=1;
 int loc2=2;
