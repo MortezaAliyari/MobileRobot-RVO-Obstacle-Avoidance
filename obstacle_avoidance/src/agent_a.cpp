@@ -63,10 +63,12 @@ float rasapos[3]={0,0,0};
 
 //Variables in RVO algorithm
 double dis_agent_obs=0;
-float agnte1Rad=0.2,obs1Rad=0.2,NR=max_range,agentvx=0,agentvy=0;
+float agnte1Rad=0.2,obs1Rad=0.2,NR=max_range,agentrelvx=0,agentrelvy=0;
 float rel_yaw=0;
 float losangle=0;
 float r_mink=obs1Rad+agnte1Rad/2; // minkowski circle with more radius than obstacle radius
+float collision_time=10000;
+bool c1,c2,c3,c4;
 //end
 
 void laser_callback(const sensor_msgs::LaserScan::ConstPtr& scan_msg)
@@ -174,9 +176,9 @@ while (ros::ok()){
 
         dis_agent_obs=ceil(sqrt((agent1pose2d.x-obs1pose2d.x)*(agent1pose2d.x-obs1pose2d.x)+(agent1pose2d.y-obs1pose2d.y)*(agent1pose2d.y-obs1pose2d.y))*100.0)/100.0; // unite is meter and Round to Two Decimal Places
         if(dis_agent_obs<NR){
-            agentvx=agent1v*cos(agent1yaw)-obs1v*cos(obs1yaw);
-            agentvy=agent1v*sin(agent1yaw)-obs1v*sin(obs1yaw);
-            rel_yaw=ceil((atan2(agentvy,agentvx))*100.0)/100.0;
+            agentrelvx=agent1v*cos(agent1yaw)-obs1v*cos(obs1yaw);
+            agentrelvy=agent1v*sin(agent1yaw)-obs1v*sin(obs1yaw);
+            rel_yaw=ceil((atan2(agentrelvy,agentrelvx))*100.0)/100.0;
             losangle=ceil((atan2((obs1pose2d.x-agent1pose2d.x),(obs1pose2d.y-agent1pose2d.y)))*100.0)/100.0;
         if(dis_agent_obs!=0)
             losangle=ceil((asin(r_mink/dis_agent_obs))*100)/100.0;
@@ -184,7 +186,16 @@ while (ros::ok()){
         else
             losangle=ceil(M_PI/2*100)/100.0;
 
-
+        if(agentrelvx-(agent1v*(cos(agent1yaw)))<=0)
+            c1=true;
+        else if (agentrelvx-(agent1v*(cos(obs1yaw)))<=0)
+            c2=true;
+        else if (agentrelvy-(agent1v*(sin(agent1yaw)))<=0)
+            c3=true;
+        else if (agentrelvy-(agent1v*(sin(obs1yaw)))<=0)
+            c4=true;
+        if(c1 ||c2 || c3 || c4)
+           // collision_time=abs(self.all_agents_pose_dict[i][0] - self.pose.x)/abs(v_mag * (cos(self.pose.theta) - cos(self.all_agents_pose_dict[i][2])))
         }
 
 
