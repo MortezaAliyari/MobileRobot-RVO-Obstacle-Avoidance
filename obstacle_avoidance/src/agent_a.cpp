@@ -39,7 +39,7 @@ std::vector<float> laser_ranges;
 //end
 
 //agent 1 properties
-float agnte1Rad=0.2,obs1Rad=0.2,NR=max_range;
+float agent1v=0.1; // meter/sec
 //end
 
 //odom obsacle1 and agent1
@@ -48,6 +48,8 @@ geometry_msgs::Pose2D obs1pose2d;
 double obs1roll, obs1pitch, obs1yaw;
 double agent1roll, agent1pitch, agent1yaw;
 bool obstaclexist=false;
+float obs1v=0.1; // meter/sec
+
 //end
 
 //map and locations
@@ -59,7 +61,13 @@ float x[4][3] = {{4,0,1}, {-11,-9,1}, {-10.5,6,1},{2,7,1}}; // goal point
 float rasapos[3]={0,0,0};
 // end
 
-
+//Variables in RVO algorithm
+double dis_agent_obs=0;
+float agnte1Rad=0.2,obs1Rad=0.2,NR=max_range,agentvx=0,agentvy=0;
+float rel_yaw=0;
+float losangle=0;
+float r_mink=obs1Rad+agnte1Rad/2; // minkowski circle with more radius than obstacle radius
+//end
 
 void laser_callback(const sensor_msgs::LaserScan::ConstPtr& scan_msg)
 {
@@ -78,10 +86,14 @@ void laser_callback(const sensor_msgs::LaserScan::ConstPtr& scan_msg)
 
 //    }
     ROS_INFO(" minimum range: %f ",*min_element (laser_ranges.begin(), laser_ranges.end()));}
+    else {
+         obstaclexist=false;
+    }
 
 }
 
 void odomObs1_callback(const nav_msgs::Odometry::ConstPtr& odomobs1_msg){
+    obs1v=odomobs1_msg->twist.twist.linear.x;
     obs1pose2d.x = odomobs1_msg->pose.pose.position.x;
     obs1pose2d.y = odomobs1_msg->pose.pose.position.y;
     tf::Quaternion q(
@@ -159,21 +171,38 @@ while (ros::ok()){
             ac.cancelAllGoals();
             cancelgaols=false;
         }
-        obstaclexist=false;
+
+        dis_agent_obs=ceil(sqrt((agent1pose2d.x-obs1pose2d.x)*(agent1pose2d.x-obs1pose2d.x)+(agent1pose2d.y-obs1pose2d.y)*(agent1pose2d.y-obs1pose2d.y))*100.0)/100.0; // unite is meter and Round to Two Decimal Places
+        if(dis_agent_obs<NR){
+            agentvx=agent1v*cos(agent1yaw)-obs1v*cos(obs1yaw);
+            agentvy=agent1v*sin(agent1yaw)-obs1v*sin(obs1yaw);
+            rel_yaw=ceil((atan2(agentvy,agentvx))*100.0)/100.0;
+            losangle=ceil((atan2((obs1pose2d.x-agent1pose2d.x),(obs1pose2d.y-agent1pose2d.y)))*100.0)/100.0;
+        if(dis_agent_obs!=0)
+            losangle=ceil((asin(r_mink/dis_agent_obs))*100)/100.0;
+
+        else
+            losangle=ceil(M_PI/2*100)/100.0;
+
+
+        }
+
+
+
+
+
+
+
+
         ROS_INFO("agent 1 Yaw: %f",agent1yaw*R2D);
-         //ROS_INFO("Cancel all goals!");
-        //ROS_INFO("wait for 5 second!!");
-       //ROS_INFO("observation: %d",observation);
-      //ros::Duration(5.0).sleep();
-     // actioncancel=true;
-
-
     }
 
     else {
         ROS_INFO("No obstackle in 3.5 radius");
         cancelgaols=true;
     }
+
+
 
     //ac.waitForResult();
     actionlib::SimpleClientGoalState state = ac.getState();
