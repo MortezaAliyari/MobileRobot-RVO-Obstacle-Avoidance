@@ -65,10 +65,13 @@ float rasapos[3]={0,0,0};
 double dis_agent_obs=0;
 float agnte1Rad=0.2,obs1Rad=0.2,NR=max_range,agentrelvx=0,agentrelvy=0;
 float rel_yaw=0;
-float losangle=0;
+float losangle=0, alpha=0;
+vector<float> alpharange={0.0,0.0};// cone angle min and max [min,max]
+vector<float> RVO={0.0, 0.0}; // RVO range base on new cone and its apex.
 float r_mink=obs1Rad+agnte1Rad/2; // minkowski circle with more radius than obstacle radius
 float collision_time=10000;
 bool c1,c2,c3,c4;
+float num=0,den=0;
 //end
 
 void laser_callback(const sensor_msgs::LaserScan::ConstPtr& scan_msg)
@@ -181,10 +184,10 @@ while (ros::ok()){
             rel_yaw=ceil((atan2(agentrelvy,agentrelvx))*100.0)/100.0;
             losangle=ceil((atan2((obs1pose2d.x-agent1pose2d.x),(obs1pose2d.y-agent1pose2d.y)))*100.0)/100.0;
         if(dis_agent_obs!=0)
-            losangle=ceil((asin(r_mink/dis_agent_obs))*100)/100.0;
+            alpha=ceil((asin(r_mink/dis_agent_obs))*100)/100.0;
 
         else
-            losangle=ceil(M_PI/2*100)/100.0;
+            alpha=ceil(M_PI/2*100)/100.0;
 
         if(agentrelvx-(agent1v*(cos(agent1yaw)))<=0)
             c1=true;
@@ -195,7 +198,13 @@ while (ros::ok()){
         else if (agentrelvy-(agent1v*(sin(obs1yaw)))<=0)
             c4=true;
         if(c1 ||c2 || c3 || c4)
-           // collision_time=abs(self.all_agents_pose_dict[i][0] - self.pose.x)/abs(v_mag * (cos(self.pose.theta) - cos(self.all_agents_pose_dict[i][2])))
+           collision_time=abs((obs1pose2d.x-r_mink*cos(losangle))-agent1pose2d.x)/abs(agentrelvx);
+        alpharange[0]=losangle-alpha;
+        alpharange[1]=losangle+alpha;
+        num=agent1v*sin(agent1yaw)+obs1v*sin(obs1yaw);
+        den=agent1v*cos(agent1yaw)+obs1v*cos(obs1yaw);
+        RVO[0]=(alpharange[0]+atan2(num,den))/2;
+        RVO[1]=(alpharange[1]+atan2(num,den))/2;
         }
 
 
