@@ -10,18 +10,20 @@
 #include <geometry_msgs/Pose2D.h>
 #include <tf/tf.h>
 #include <math.h>
+#include "geometry_msgs/Twist.h"
 
 using namespace std;
 
 typedef actionlib::SimpleActionClient<move_base_msgs::MoveBaseAction> MoveBaseClient;
 
+ros::Publisher velpubagent1;
 ros::Subscriber laser_subscriber;
 ros::Subscriber odomObs1_sub;
 ros::Subscriber odomagnt1_sub;
 
 sensor_msgs::LaserScan laser_msg;
 nav_msgs::Odometry odomObs1_msg;
-
+geometry_msgs::Twist velmsgagent1;
 
 
 bool rasa=true,actioncancel=true;
@@ -31,6 +33,7 @@ double R2D=180/M_PI, D2R=M_PI/180;
 int observation=0;
 bool cancelgaols=true;
 int hz=20;
+float Ts=1/hz;
 //end
 
 //lidar
@@ -72,6 +75,10 @@ float r_mink=obs1Rad+agnte1Rad/2; // minkowski circle with more radius than obst
 float collision_time=10000;
 bool c1,c2,c3,c4;
 float num=0,den=0;
+float least_distance=10;
+float incr=0.01;// RVO resolution
+float desire_heading=0,bestheading=0;
+int indexbest=0;
 //end
 
 void laser_callback(const sensor_msgs::LaserScan::ConstPtr& scan_msg)
@@ -137,7 +144,6 @@ void odomagent1_callback(const nav_msgs::Odometry::ConstPtr& odomoagetn1_msg){
 }
 
 
-
 int main(int argc, char** argv){
 
 ros::init(argc, argv, "agent_a");
@@ -147,6 +153,16 @@ MoveBaseClient ac("/tb3_1/move_base", true);
 laser_subscriber = n.subscribe("/tb3_1/scan", 10, laser_callback);
 odomObs1_sub     = n.subscribe("/tb3_2/odom", 10, odomObs1_callback);
 odomagnt1_sub    = n.subscribe("/tb3_1/odom", 10, odomagent1_callback);
+velpubagent1     = n.advertise<geometry_msgs::Twist>("/tb3_1/cmd_vel", 1);
+vector<float> heading_vect;// -pi to pi
+vector<float> absheading_vect;
+for (float i=-M_PI;i<=M_PI;i=i+incr)
+    heading_vect.push_back(ceil(i*100.0)/100.0);
+
+//for (auto it = heading_vect.begin(); it != heading_vect.end(); it++)
+//    ROS_INFO("heading vector : %f",*it);
+
+
 ros::Rate loop_rate(hz);
 //wait for the action server to come up
 while(!ac.waitForServer(ros::Duration(5.0))){
@@ -177,44 +193,60 @@ while (ros::ok()){
             cancelgaols=false;
         }
 
-        dis_agent_obs=ceil(sqrt((agent1pose2d.x-obs1pose2d.x)*(agent1pose2d.x-obs1pose2d.x)+(agent1pose2d.y-obs1pose2d.y)*(agent1pose2d.y-obs1pose2d.y))*100.0)/100.0; // unite is meter and Round to Two Decimal Places
-        if(dis_agent_obs<NR){
-            agentrelvx=agent1v*cos(agent1yaw)-obs1v*cos(obs1yaw);
-            agentrelvy=agent1v*sin(agent1yaw)-obs1v*sin(obs1yaw);
-            rel_yaw=ceil((atan2(agentrelvy,agentrelvx))*100.0)/100.0;
-            losangle=ceil((atan2((obs1pose2d.x-agent1pose2d.x),(obs1pose2d.y-agent1pose2d.y)))*100.0)/100.0;
-        if(dis_agent_obs!=0)
-            alpha=ceil((asin(r_mink/dis_agent_obs))*100)/100.0;
+//        dis_agent_obs=ceil(sqrt((agent1pose2d.x-obs1pose2d.x)*(agent1pose2d.x-obs1pose2d.x)+(agent1pose2d.y-obs1pose2d.y)*(agent1pose2d.y-obs1pose2d.y))*100.0)/100.0; // unite is meter and Round to Two Decimal Places
+//        if(dis_agent_obs<NR){
+//            agentrelvx=agent1v*cos(agent1yaw)-obs1v*cos(obs1yaw);
+//            agentrelvy=agent1v*sin(agent1yaw)-obs1v*sin(obs1yaw);
+//            rel_yaw=ceil((atan2(agentrelvy,agentrelvx))*100.0)/100.0;
+//            losangle=ceil((atan2((obs1pose2d.x-agent1pose2d.x),(obs1pose2d.y-agent1pose2d.y)))*100.0)/100.0;
+//        if(dis_agent_obs!=0)
+//            alpha=ceil((asin(r_mink/dis_agent_obs))*100)/100.0;
 
-        else
-            alpha=ceil(M_PI/2*100)/100.0;
+//        else
+//            alpha=ceil(M_PI/2*100)/100.0;
 
-        if(agentrelvx-(agent1v*(cos(agent1yaw)))<=0)
-            c1=true;
-        else if (agentrelvx-(agent1v*(cos(obs1yaw)))<=0)
-            c2=true;
-        else if (agentrelvy-(agent1v*(sin(agent1yaw)))<=0)
-            c3=true;
-        else if (agentrelvy-(agent1v*(sin(obs1yaw)))<=0)
-            c4=true;
-        if(c1 ||c2 || c3 || c4)
-           collision_time=abs((obs1pose2d.x-r_mink*cos(losangle))-agent1pose2d.x)/abs(agentrelvx);
-        alpharange[0]=losangle-alpha;
-        alpharange[1]=losangle+alpha;
-        num=agent1v*sin(agent1yaw)+obs1v*sin(obs1yaw);
-        den=agent1v*cos(agent1yaw)+obs1v*cos(obs1yaw);
-        RVO[0]=(alpharange[0]+atan2(num,den))/2;
-        RVO[1]=(alpharange[1]+atan2(num,den))/2;
-        }
+//        if(agentrelvx-(agent1v*(cos(agent1yaw)))<=0)
+//            c1=true;
+//        else if (agentrelvx-(agent1v*(cos(obs1yaw)))<=0)
+//            c2=true;
+//        else if (agentrelvy-(agent1v*(sin(agent1yaw)))<=0)
+//            c3=true;
+//        else if (agentrelvy-(agent1v*(sin(obs1yaw)))<=0)
+//            c4=true;
+//        if(c1 ||c2 || c3 || c4)
+//           collision_time=abs((obs1pose2d.x-r_mink*cos(losangle))-agent1pose2d.x)/abs(agentrelvx);
+//        alpharange[0]=losangle-alpha;
+//        alpharange[1]=losangle+alpha;
+//        num=agent1v*sin(agent1yaw)+obs1v*sin(obs1yaw);
+//        den=agent1v*cos(agent1yaw)+obs1v*cos(obs1yaw);
+//        RVO[0]=ceil((((alpharange[0]+atan2(num,den))/2)*100.0)/100.0);
+//        RVO[1]=ceil((((alpharange[1]+atan2(num,den))/2)*100.0)/100.0);
+//        if(dis_agent_obs<least_distance)
+//            least_distance=dis_agent_obs;
+//        }
+//    velmsgagent1.linear.x=(least_distance/3)/NR;
+
+////chwck collision probability
+//    if(RVO[0]<agent1yaw && agent1yaw<RVO[1]){ // if true, will be collision in moment of time
+//        desire_heading=ceil((atan2((x[0][0]-agent1pose2d.x),(x[0][1]-agent1pose2d.y)))*100.0)/100.0;
+//        //RVO region
+
+//        for (auto index=find(heading_vect.begin(),heading_vect.end(),RVO[0]);index<=find(heading_vect.begin(),heading_vect.end(),RVO[1]);index++) {
+//            heading_vect.erase(index);
+//        }
+//        for (auto it=heading_vect.begin();it<heading_vect.end();it++){
+//            absheading_vect[it-heading_vect.begin()]=abs(heading_vect[it-heading_vect.begin()]-desire_heading);
+//        }
+//        indexbest=min_element (absheading_vect.begin(), absheading_vect.end())-absheading_vect.begin();
+//        bestheading=heading_vect[(indexbest-1)%heading_vect.size()];
+//    }
 
 
 
 
 
+//        ROS_INFO("agent 1 Yaw: %f",agent1yaw*R2D);
 
-
-
-        ROS_INFO("agent 1 Yaw: %f",agent1yaw*R2D);
     }
 
     else {
