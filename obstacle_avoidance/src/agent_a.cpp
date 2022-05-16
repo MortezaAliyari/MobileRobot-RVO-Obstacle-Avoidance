@@ -29,11 +29,13 @@ geometry_msgs::Twist velmsgagent1;
 bool rasa=true,actioncancel=true;
 
 //general vatiables
-double R2D=180/M_PI, D2R=M_PI/180;
+double R2D=180.0/M_PI, D2R= M_PI/180.0;
 int observation=0;
 bool cancelgaols=true;
 int hz=20;
-float Ts=1/hz;
+float Ts=1.0/hz,kpw=5,kiw=2,kdw=0.1,uw=0;
+bool updatervo=true;
+
 //end
 
 //lidar
@@ -42,7 +44,7 @@ std::vector<float> laser_ranges;
 //end
 
 //agent 1 properties
-float agent1v=0.1; // meter/sec
+float agent1v=0.1,vx=0; // meter/sec
 //end
 
 //odom obsacle1 and agent1
@@ -51,7 +53,7 @@ geometry_msgs::Pose2D obs1pose2d;
 double obs1roll, obs1pitch, obs1yaw;
 double agent1roll, agent1pitch, agent1yaw;
 bool obstaclexist=false;
-float obs1v=0.1; // meter/sec
+float obs1v=0.0; // obstacle velocity is 0 meter/sec
 
 //end
 
@@ -79,6 +81,7 @@ float least_distance=10;
 float incr=0.01;// RVO resolution
 float desire_heading=0,bestheading=0;
 int indexbest=0;
+
 //end
 
 void laser_callback(const sensor_msgs::LaserScan::ConstPtr& scan_msg)
@@ -97,7 +100,8 @@ void laser_callback(const sensor_msgs::LaserScan::ConstPtr& scan_msg)
 //        ROS_INFO("laser output:  %f",laser_ranges[i]);
 
 //    }
-    ROS_INFO(" minimum range: %f ",*min_element (laser_ranges.begin(), laser_ranges.end()));}
+    //ROS_INFO(" minimum range: %f ",*min_element (laser_ranges.begin(), laser_ranges.end()));
+    }
     else {
          obstaclexist=false;
     }
@@ -143,6 +147,39 @@ void odomagent1_callback(const nav_msgs::Odometry::ConstPtr& odomoagetn1_msg){
     //ROS_INFO("agent 1 Yaw: %f",agent1yaw*R2D);
 }
 
+//vector<float> thetavect={10,0.0,-10,0};
+vector<float> thetavect={0.0,0.0,0.0,0.0};
+int counter=0,rvocounter=0,i=0;
+
+double PIDW(double besttheta,double kpw,double kiw,double kdw){
+    double e=0,kpError=0,kiError=0,kdError=0,uw=0;
+    e=besttheta-double(agent1pose2d.theta);
+
+    kpError=kpw*e;
+    kiError=kiw*(kiError+e*Ts);
+    kdError=kdw*(e-kdError)/Ts;
+    uw=kpError+kiError+kdError;
+    if (uw>0.5 || uw<-0.5){
+        if(uw>0){
+            uw=0.5;
+        }
+        else{
+            uw=-0.5;
+        }
+    }
+//    logdata.linear.x=kpw;
+//    logdata.linear.y=kiw;
+//    logdata.linear.z=kdw;
+//    logdata.angular.x=uw;
+//    logdata.angular.y=e;
+//    log_publisher.publish(logdata);
+    ROS_INFO("c: %d, rvoc: %d, theta:%f, Besttheta: %f, error : %f , uw: %f",counter,rvocounter,agent1pose2d.theta*R2D,besttheta*R2D,e,uw);
+    //ROS_INFO("kp: %f, ki: %f, kd: %f : ",kpw,kiw,kdw);
+    //ROS_INFO("Ekp: %f, Eki: %f, Ekd: %f : , Ts: %f",kpError,kiError,kdError,Ts);
+
+
+    return uw;
+}
 
 int main(int argc, char** argv){
 
@@ -182,6 +219,9 @@ ROS_INFO("The Goal position is : x: %f y: %f theta: %f", x[0][0], x[0][1], x[0][
 ac.sendGoal(goal);
 ROS_INFO("Sending goal");
 ros::Duration(2.0).sleep();
+
+
+
 while (ros::ok()){
 
     if(obstaclexist){
@@ -193,44 +233,51 @@ while (ros::ok()){
             cancelgaols=false;
         }
 
-//        dis_agent_obs=ceil(sqrt((agent1pose2d.x-obs1pose2d.x)*(agent1pose2d.x-obs1pose2d.x)+(agent1pose2d.y-obs1pose2d.y)*(agent1pose2d.y-obs1pose2d.y))*100.0)/100.0; // unite is meter and Round to Two Decimal Places
-//        if(dis_agent_obs<NR){
-//            agentrelvx=agent1v*cos(agent1yaw)-obs1v*cos(obs1yaw);
-//            agentrelvy=agent1v*sin(agent1yaw)-obs1v*sin(obs1yaw);
-//            rel_yaw=ceil((atan2(agentrelvy,agentrelvx))*100.0)/100.0;
-//            losangle=ceil((atan2((obs1pose2d.x-agent1pose2d.x),(obs1pose2d.y-agent1pose2d.y)))*100.0)/100.0;
-//        if(dis_agent_obs!=0)
-//            alpha=ceil((asin(r_mink/dis_agent_obs))*100)/100.0;
 
-//        else
-//            alpha=ceil(M_PI/2*100)/100.0;
 
-//        if(agentrelvx-(agent1v*(cos(agent1yaw)))<=0)
-//            c1=true;
-//        else if (agentrelvx-(agent1v*(cos(obs1yaw)))<=0)
-//            c2=true;
-//        else if (agentrelvy-(agent1v*(sin(agent1yaw)))<=0)
-//            c3=true;
-//        else if (agentrelvy-(agent1v*(sin(obs1yaw)))<=0)
-//            c4=true;
-//        if(c1 ||c2 || c3 || c4)
-//           collision_time=abs((obs1pose2d.x-r_mink*cos(losangle))-agent1pose2d.x)/abs(agentrelvx);
-//        alpharange[0]=losangle-alpha;
-//        alpharange[1]=losangle+alpha;
-//        num=agent1v*sin(agent1yaw)+obs1v*sin(obs1yaw);
-//        den=agent1v*cos(agent1yaw)+obs1v*cos(obs1yaw);
-//        RVO[0]=ceil((((alpharange[0]+atan2(num,den))/2)*100.0)/100.0);
-//        RVO[1]=ceil((((alpharange[1]+atan2(num,den))/2)*100.0)/100.0);
-//        if(dis_agent_obs<least_distance)
-//            least_distance=dis_agent_obs;
-//        }
-//    velmsgagent1.linear.x=(least_distance/3)/NR;
 
-////chwck collision probability
+        dis_agent_obs=ceil(sqrt((agent1pose2d.x-obs1pose2d.x)*(agent1pose2d.x-obs1pose2d.x)+(agent1pose2d.y-obs1pose2d.y)*(agent1pose2d.y-obs1pose2d.y))*100.0)/100.0; // unite is meter and Round to Two Decimal Places
+        if(dis_agent_obs<NR){
+            agentrelvx=agent1v*cos(agent1yaw)-obs1v*cos(obs1yaw);
+            agentrelvy=agent1v*sin(agent1yaw)-obs1v*sin(obs1yaw);
+            rel_yaw=ceil((atan2(agentrelvy,agentrelvx))*100.0)/100.0;
+            losangle=ceil((atan2((obs1pose2d.y-agent1pose2d.y),(obs1pose2d.x-agent1pose2d.x)))*100.0)/100.0;
+
+        if(dis_agent_obs!=0)
+            alpha=ceil((asin(r_mink/dis_agent_obs))*100)/100.0;
+        else
+            alpha=ceil(M_PI/2*100)/100.0;
+        ROS_INFO("agentrelvx: %f agentrelvy: %f rel_yaw: %f losangle: %f alpha: %f",agentrelvx,agentrelvy,rel_yaw*R2D,losangle*R2D,alpha*R2D);
+
+        if(agentrelvx-(agent1v*(cos(agent1yaw)))<=0)
+            c1=true;
+        else if (agentrelvx-(agent1v*(cos(obs1yaw)))<=0)
+            c2=true;
+        else if (agentrelvy-(agent1v*(sin(agent1yaw)))<=0)
+            c3=true;
+        else if (agentrelvy-(agent1v*(sin(obs1yaw)))<=0)
+            c4=true;
+        if(c1 ||c2 || c3 || c4)
+           collision_time=abs((obs1pose2d.x-r_mink*cos(losangle))-agent1pose2d.x)/abs(agentrelvx);
+        alpharange[0]=losangle-alpha;
+        alpharange[1]=losangle+alpha;
+        num=agent1v*sin(agent1yaw)+obs1v*sin(obs1yaw);
+        den=agent1v*cos(agent1yaw)+obs1v*cos(obs1yaw);
+        RVO[0]=ceil((((alpharange[0]+atan2(num,den))/2)*100.0)/100.0);
+        RVO[1]=ceil((((alpharange[1]+atan2(num,den))/2)*100.0)/100.0);
+        if(dis_agent_obs<least_distance)
+            least_distance=dis_agent_obs;
+        vx=(least_distance/3)/NR;
+        //ROS_INFO("dis_agent_obs<NR %f, Vx: %f, collision_time: %f",dis_agent_obs,vx,collision_time);
+        }
+        ROS_INFO("alpharange[0]: %f < agent1yaw: %f < alpharange[1]: %f",alpharange[0]*R2D,agent1yaw*R2D,alpharange[1]*R2D);
+        //ROS_INFO("RVO[0]: %f < agent1yaw: %f < RVO[1]: %f",RVO[0]*R2D,agent1yaw*R2D,RVO[1]*R2D);
+
+
+////check collision probability
 //    if(RVO[0]<agent1yaw && agent1yaw<RVO[1]){ // if true, will be collision in moment of time
 //        desire_heading=ceil((atan2((x[0][0]-agent1pose2d.x),(x[0][1]-agent1pose2d.y)))*100.0)/100.0;
 //        //RVO region
-
 //        for (auto index=find(heading_vect.begin(),heading_vect.end(),RVO[0]);index<=find(heading_vect.begin(),heading_vect.end(),RVO[1]);index++) {
 //            heading_vect.erase(index);
 //        }
@@ -240,18 +287,33 @@ while (ros::ok()){
 //        indexbest=min_element (absheading_vect.begin(), absheading_vect.end())-absheading_vect.begin();
 //        bestheading=heading_vect[(indexbest-1)%heading_vect.size()];
 //    }
-
-
-
-
-
-//        ROS_INFO("agent 1 Yaw: %f",agent1yaw*R2D);
-
+//        ROS_INFO("alpharange[0]: %f < agent1yaw: %f < alpharange[1]: %f * Besttheta %f",alpharange[0],agent1yaw*R2D,alpharange[1],bestheading*R2D);
+        uw=PIDW(thetavect[i]*D2R,kpw,kiw,kdw);
+        velmsgagent1.angular.z=uw;
+        velmsgagent1.linear.x=agent1v;
+        velpubagent1.publish(velmsgagent1);
+        if(abs(thetavect[i]*M_PI/180-agent1yaw)<0.01){
+            updatervo=true;
+            //ROS_INFO("RVO can be update %d",rvocounter);
+            rvocounter++;
+        }
+        else {
+            updatervo=false;
+        }
+        counter++;
+        if(counter>=700){
+            i++;
+            counter=0;
+            rvocounter=0;
+        }
+        if (i>3)
+            i=0;
     }
 
     else {
-        ROS_INFO("No obstackle in 3.5 radius");
+        //ROS_INFO("No obstackle in 3.5 radius");
         cancelgaols=true;
+
     }
 
 
