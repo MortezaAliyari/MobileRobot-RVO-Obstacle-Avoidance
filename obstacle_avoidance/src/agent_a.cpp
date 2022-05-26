@@ -13,12 +13,16 @@
 #include "geometry_msgs/Twist.h"
 #include <vector>
 #include<bits/stdc++.h>
+#include <obstacle_avoidance/Points.h>
+
 
 using namespace std;
 
 typedef actionlib::SimpleActionClient<move_base_msgs::MoveBaseAction> MoveBaseClient;
 
-ros::Publisher velpubagent1;
+ros::Publisher  velpubagent1;
+ros::Publisher  Pointspubagent1;
+
 ros::Subscriber laser_subscriber;
 ros::Subscriber odomObs1_sub;
 ros::Subscriber odomagnt1_sub;
@@ -26,6 +30,8 @@ ros::Subscriber odomagnt1_sub;
 sensor_msgs::LaserScan laser_msg;
 nav_msgs::Odometry odomObs1_msg;
 geometry_msgs::Twist velmsgagent1;
+// use these point to create the local cost map
+obstacle_avoidance::Points pobs1;
 
 
 bool rasa=true,actioncancel=true;
@@ -124,6 +130,8 @@ void odomObs1_callback(const nav_msgs::Odometry::ConstPtr& odomobs1_msg){
     m.getRPY(obs1roll, obs1pitch, obs1yaw);
 
     obs1pose2d.theta = obs1yaw;
+    pobs1.x[2]=odomobs1_msg->pose.pose.position.x;
+    pobs1.y[2]=odomobs1_msg->pose.pose.position.y;
     //ROS_INFO("oYaw: %f",obs1yaw*R2D);
 //ROS_INFO("Seq: [%d]", odomobs1_msg->header.seq);
 //ROS_INFO("Position-> x: [%f], y: [%f], z: [%f]", odomobs1_msg->pose.pose.position.x,odomobs1_msg->pose.pose.position.y, odomobs1_msg->pose.pose.position.z);
@@ -146,12 +154,12 @@ void odomagent1_callback(const nav_msgs::Odometry::ConstPtr& odomoagetn1_msg){
     m.getRPY(agent1roll, agent1pitch, agent1yaw);
 
     agent1pose2d.theta = agent1yaw;
+    pobs1.x[1]=odomoagetn1_msg->pose.pose.position.x;
+    pobs1.y[1]=odomoagetn1_msg->pose.pose.position.y;
     //ROS_INFO("agent 1 Yaw: %f",agent1yaw*R2D);
 }
 
-//vector<float> thetavect={10,0.0,-10,0};
-vector<float> thetavect={0.0,0.0,0.0,0.0};
-int i=0;
+
 
 double PIDW(double besttheta,double kpw,double kiw,double kdw){
     double e=0,kpError=0,kiError=0,kdError=0,uw=0;
@@ -193,13 +201,26 @@ laser_subscriber = n.subscribe("/tb3_1/scan", 10, laser_callback);
 odomObs1_sub     = n.subscribe("/tb3_2/odom", 10, odomObs1_callback);
 odomagnt1_sub    = n.subscribe("/tb3_1/odom", 10, odomagent1_callback);
 velpubagent1     = n.advertise<geometry_msgs::Twist>("/tb3_1/cmd_vel", 1);
+Pointspubagent1     = n.advertise<obstacle_avoidance::Points>("/pointscostmap/obstacl1", 1);
+
 vector<float> heading_vect;// -pi to pi
 for (float i=-M_PI;i<=M_PI;i=i+incr)
     heading_vect.push_back(ceil(i*100.0)/100.0);
 
-//for (auto it = heading_vect.begin(); it != heading_vect.end(); it++)
-//    ROS_INFO("heading vector : %f",*it);
+for (auto it = heading_vect.begin(); it != heading_vect.end(); it++)
+    ROS_INFO("heading vector : %f",*it);
+//float k=0.0;
+//for (int j=0;j<pobs1.x.size();j++) {
+//    k=k+0.01;
+//    pobs1.x[j]=k;
+//    pobs1.y[j]=k;
 
+//}
+//for (int j=0;j<pobs1.x.size();j++){
+//    ROS_INFO("x: %f y: %f",pobs1.x[j],pobs1.y[j]);
+//    Pointspubagent1.publish(pobs1);
+//    ros::Duration(1.0).sleep();
+//}
 
 ros::Rate loop_rate(hz);
 //wait for the action server to come up
@@ -270,7 +291,7 @@ while (ros::ok()){
         //ROS_INFO("alpharange[0]: %f < agent1yaw: %f < alpharange[1]: %f",alpharange[0]*R2D,agent1yaw*R2D,alpharange[1]*R2D);
         //ROS_INFO("num %f ,den %f , atan2: %f",num*R2D,den*R2D,atan2(num,den)*R2D);
         ROS_INFO("RVO[0]:        %f < agent1yaw: %f < RVO[1]:        %f",RVO[0],agent1yaw,RVO[1]);
-
+        Pointspubagent1.publish(pobs1);
 
 ////check collision probability
         if(RVO[0]<agent1yaw && agent1yaw<RVO[1]){ // if true, will be collision in moment of time
