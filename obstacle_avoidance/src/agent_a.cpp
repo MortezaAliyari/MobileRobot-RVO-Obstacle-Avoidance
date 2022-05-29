@@ -32,9 +32,14 @@ nav_msgs::Odometry odomObs1_msg;
 geometry_msgs::Twist velmsgagent1;
 // use these point to create the local cost map
 obstacle_avoidance::Points pobs1;
-
+float x13,x23,x14,x24,y13,y23,y14,y24,offset1,offset2;
 
 bool rasa=true,actioncancel=true;
+//local cost map variables
+float resmap=0.01;
+
+
+//end
 
 //general vatiables
 double R2D=180.0/M_PI, D2R= M_PI/180.0;
@@ -78,8 +83,8 @@ float rasapos[3]={0,0,0};
 double dis_agent_obs=0;
 float agnte1Rad=0.2,obs1Rad=0.2,NR=max_range,agentrelvx=0,agentrelvy=0;
 float rel_yaw=0;
-float losangle=0, alpha=0;
-vector<float> alpharange={0.0,0.0};// cone angle min and max [min,max]
+float losangle=0,losangle2=0, alpha=0,alpha2=0;
+vector<float> alpharange={0.0,0.0},alpharange2={0.0,0.0};// cone angle min and max [min,max]
 vector<float> RVO={0.0, 0.0}; // RVO range base on new cone and its apex.
 float r_mink=obs1Rad+agnte1Rad/2; // minkowski circle with more radius than obstacle radius
 float collision_time=10000;
@@ -130,8 +135,8 @@ void odomObs1_callback(const nav_msgs::Odometry::ConstPtr& odomobs1_msg){
     m.getRPY(obs1roll, obs1pitch, obs1yaw);
 
     obs1pose2d.theta = obs1yaw;
-    pobs1.x[2]=odomobs1_msg->pose.pose.position.x;
-    pobs1.y[2]=odomobs1_msg->pose.pose.position.y;
+    pobs1.x[1]=odomobs1_msg->pose.pose.position.x;
+    pobs1.y[1]=odomobs1_msg->pose.pose.position.y;
     //ROS_INFO("oYaw: %f",obs1yaw*R2D);
 //ROS_INFO("Seq: [%d]", odomobs1_msg->header.seq);
 //ROS_INFO("Position-> x: [%f], y: [%f], z: [%f]", odomobs1_msg->pose.pose.position.x,odomobs1_msg->pose.pose.position.y, odomobs1_msg->pose.pose.position.z);
@@ -154,8 +159,8 @@ void odomagent1_callback(const nav_msgs::Odometry::ConstPtr& odomoagetn1_msg){
     m.getRPY(agent1roll, agent1pitch, agent1yaw);
 
     agent1pose2d.theta = agent1yaw;
-    pobs1.x[1]=odomoagetn1_msg->pose.pose.position.x;
-    pobs1.y[1]=odomoagetn1_msg->pose.pose.position.y;
+    pobs1.x[0]=odomoagetn1_msg->pose.pose.position.x;
+    pobs1.y[0]=odomoagetn1_msg->pose.pose.position.y;
     //ROS_INFO("agent 1 Yaw: %f",agent1yaw*R2D);
 }
 
@@ -183,7 +188,7 @@ double PIDW(double besttheta,double kpw,double kiw,double kdw){
 //    logdata.angular.x=uw;
 //    logdata.angular.y=e;
 //    log_publisher.publish(logdata);
-    ROS_INFO("c: %d, rvoc: %d, theta:%f, Besttheta: %f, error : %f , uw: %f",goalcounter,rvocounter,agent1pose2d.theta*R2D,besttheta*R2D,e,uw);
+//    ROS_INFO("c: %d, rvoc: %d, theta:%f, Besttheta: %f, error : %f , uw: %f",goalcounter,rvocounter,agent1pose2d.theta*R2D,besttheta*R2D,e,uw);
     //ROS_INFO("kp: %f, ki: %f, kd: %f : ",kpw,kiw,kdw);
     //ROS_INFO("Ekp: %f, Eki: %f, Ekd: %f : , Ts: %f",kpError,kiError,kdError,Ts);
 
@@ -201,7 +206,7 @@ laser_subscriber = n.subscribe("/tb3_1/scan", 10, laser_callback);
 odomObs1_sub     = n.subscribe("/tb3_2/odom", 10, odomObs1_callback);
 odomagnt1_sub    = n.subscribe("/tb3_1/odom", 10, odomagent1_callback);
 velpubagent1     = n.advertise<geometry_msgs::Twist>("/tb3_1/cmd_vel", 1);
-Pointspubagent1     = n.advertise<obstacle_avoidance::Points>("/pointscostmap/obstacl1", 1);
+Pointspubagent1  = n.advertise<obstacle_avoidance::Points>("/pointscostmap/obstacl1", 1);
 
 vector<float> heading_vect;// -pi to pi
 for (float i=-M_PI;i<=M_PI;i=i+incr)
@@ -261,7 +266,7 @@ while (ros::ok()){
             rel_yaw=ceil((atan2(agentrelvy,agentrelvx))*100.0)/100.0;
             losangle=ceil((atan2((obs1pose2d.y-agent1pose2d.y),(obs1pose2d.x-agent1pose2d.x)))*100.0)/100.0;
 
-        if(dis_agent_obs!=0)
+        if(dis_agent_obs>=r_mink)
             alpha=ceil((asin(r_mink/dis_agent_obs))*100)/100.0;
         else
             alpha=ceil(M_PI/2*100)/100.0;
@@ -286,24 +291,58 @@ while (ros::ok()){
         if(dis_agent_obs<least_distance)
             least_distance=dis_agent_obs;
         vx=(least_distance/3)/NR;
+        if(losangle<0 && losangle>-3.14){
+            offset1=-r_mink;
+            offset2=+0.666*dis_agent_obs; // 2/3*dis
+
+        }
+        else {
+            offset1=r_mink;
+            offset2=-0.666*dis_agent_obs;
+        }
+        losangle2=ceil((atan((obs1pose2d.y-agent1pose2d.y)/(obs1pose2d.x-agent1pose2d.x)))*100.0)/100.0;
+        alpharange2[0]=losangle2-alpha;
+        alpharange2[1]=losangle2+alpha;
+            ROS_INFO("losangle %f, alpha %f ,alpharange[0] %f ,alpharange[1] %f dis_agent_obs %f",losangle2,alpha,alpharange2[0],alpharange2[1],dis_agent_obs);
+            float a=(alpharange[0]+alpharange[1])/2;
+//            x13=((obs1pose2d.x/losangle)+obs1pose2d.y+ alpharange[0]*agent1pose2d.x-agent1pose2d.y)/(alpharange[0]+(1/losangle));
+//            x23=((obs1pose2d.x/losangle)+obs1pose2d.y+ alpharange[1]*agent1pose2d.x-agent1pose2d.y)/(alpharange[1]+(1/losangle));
+    //        x14=((obs1pose2d.x/losangle)+obs1pose2d.y+offset2+ alpharange[0]*agent1pose2d.x-agent1pose2d.y)/(alpharange[0]+(1/losangle));
+    //        x24=((obs1pose2d.x/losangle)+obs1pose2d.y+offset2+ alpharange[1]*agent1pose2d.x-agent1pose2d.y)/(alpharange[1]+(1/losangle));
+//            y13=alpharange[0]*(x13-agent1pose2d.x)+agent1pose2d.y;
+//            y23=alpharange[1]*(x23-agent1pose2d.x)+agent1pose2d.y;
+    //        y14=alpharange[0]*(x14-agent1pose2d.x)+agent1pose2d.y;
+    //        y24=alpharange[1]*(x24-agent1pose2d.x)+agent1pose2d.y;
+            pobs1.x[2]= alpharange2[0];
+            pobs1.x[3]= alpharange2[1];
+            pobs1.x[4]=losangle2;
+
+            pobs1.x[5]=dis_agent_obs;
+            pobs1.y[2]=-10;
+            pobs1.y[3]=-10;
+            pobs1.y[4]=-10;
+            pobs1.y[5]=-10;
+        //ROS_INFO("(%f,%f),(%f,%f),(%f,%f),(%f,%f)",agent1pose2d.x,agent1pose2d.y,obs1pose2d.x,obs1pose2d.y,x13,y13,x23,y23);
+
         //ROS_INFO("dis_agent_obs<NR %f, Vx: %f, collision_time: %f",dis_agent_obs,vx,collision_time);
+        Pointspubagent1.publish(pobs1);
         }
         //ROS_INFO("alpharange[0]: %f < agent1yaw: %f < alpharange[1]: %f",alpharange[0]*R2D,agent1yaw*R2D,alpharange[1]*R2D);
         //ROS_INFO("num %f ,den %f , atan2: %f",num*R2D,den*R2D,atan2(num,den)*R2D);
-        ROS_INFO("RVO[0]:        %f < agent1yaw: %f < RVO[1]:        %f",RVO[0],agent1yaw,RVO[1]);
-        Pointspubagent1.publish(pobs1);
+        //ROS_INFO("RVO[0]:        %f < agent1yaw: %f < RVO[1]:        %f",RVO[0],agent1yaw,RVO[1]);
+        //
 
 ////check collision probability
         if(RVO[0]<agent1yaw && agent1yaw<RVO[1]){ // if true, will be collision in moment of time
             desire_heading=ceil((atan2((x[0][1]-agent1pose2d.y),(x[0][0]-agent1pose2d.x)))*100.0)/100.0;
-            ROS_INFO("desire_heading %f",desire_heading*R2D);
+           // ROS_INFO("desire_heading %f",desire_heading*R2D);
             vector<float> absheading_vect;
             vector<float> heading_vect2;
             heading_vect2=heading_vect;
             vector<float>::iterator it=find(heading_vect2.begin(),heading_vect2.end(), RVO[0]); //find index min RVO in Circle -pi,+pi
             vector<float>::iterator it2=find(heading_vect2.begin(),heading_vect2.end(),RVO[1] );//find index max RVO in Circle -pi,+pi
             vector<float>::iterator it3,it4;
-            ROS_INFO("it : %d it2 : %d diff : %d",it,it2,it2-it);
+           // ROS_INFO("it : %d it2 : %d diff : %d",it,it2,it2-it);
             //RVO region
             for (int k=0;k<(it2-it);k++)//removing RVO[0]<Yaw<RVO[1] from [-pi,+pi]-> new area outside RVO
                 heading_vect2.erase(it);
@@ -322,7 +361,7 @@ while (ros::ok()){
         }
         if ((ceil(sqrt((agent1pose2d.x-x[0][0])*(agent1pose2d.x-x[0][0])+(agent1pose2d.y-x[0][1])*(agent1pose2d.y-x[0][1]))*100.0)/100.0)>0.01 ){
 
-        ROS_INFO("Besttheta %f",bestheading*R2D);
+       // ROS_INFO("Besttheta %f",bestheading*R2D);
         uw=PIDW(bestheading,kpw,kiw,kdw);
         velmsgagent1.angular.z=uw;
         velmsgagent1.linear.x=agent1v;
