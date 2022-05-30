@@ -388,7 +388,6 @@ while (ros::ok()){
     }
 
 
-
     //ac.waitForResult();
     actionlib::SimpleClientGoalState state = ac.getState();
 
