@@ -1,0 +1,14 @@
+int64 a
+---
+float32 pointX1
+float32 pointX2
+float32 pointX3
+float32 pointX4
+float32 pointY1
+float32 pointY2
+float32 pointY3
+float32 pointY4
+float32[] array_line_point_X1
+float32[] array_line_point_Y1
+float32[] static_obstacle_array_X1
+float32[] static_obstacle_array_Y1
